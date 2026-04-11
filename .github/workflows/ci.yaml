@@ -11,14 +11,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Sonarqube Scan
-        uses: sonarsource/sonarqube-scan-action@v3
+        uses: SonarSource/sonarcloud-github-action@4006f663ecaf1f8093e8e4abb9227f6041f52216
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
             -Dsonar.projectKey=notification-service-pipelines
-            -Dsonar.organization=notification-service-pipelines
+            -Dsonar.organization=muhammedsinanust
+            -Dsonar.sources=.
 
       - name: Sonarqube Quality Gate Check
         id: sonarqube-quality-gate-check
