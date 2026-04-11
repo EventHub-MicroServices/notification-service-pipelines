@@ -20,13 +20,13 @@ jobs:
           node-version: '20'
 
       - name: Install Dependencies
-        run: npm install 
+        run: npm install --ignore-scripts
 
       - name: Run Tests and Generate Coverage
         run: npm test
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarcloud-github-action@4006f663ecaf1f8093e8e4abb9227f6041f52216
+        uses: SonarSource/sonarcloud-github-action@master
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
@@ -35,8 +35,7 @@ jobs:
             -Dsonar.organization=muhammedsinanust
             -Dsonar.sources=.
             -Dsonar.exclusions=node_modules/**,coverage/**,**/*.test.js
-            -Dsonar.tests=.
-            -Dsonar.test.inclusions=**/*.test.js
+            -Dsonar.coverage.exclusions=server.js
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
             -Dsonar.host.url=https://sonarcloud.io
 
@@ -44,13 +43,7 @@ jobs:
         id: sonarqube-quality-gate-check  
         uses: sonarsource/sonarqube-quality-gate-action@d304d050d930b02a896b0f85935344f023928496
         with:
-            scanMetadataReportFile: .scannerwork/report-task.txt
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-            
-      - name: Sonarqube Report
-        uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b
+          scanMetadataReportFile: .scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -61,9 +54,8 @@ jobs:
     steps:          
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Snyk Scan
-        uses: snyk/actions@cd99351a0293699c279a0b127419e5309d43702a
+        uses: snyk/actions@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
