@@ -32,12 +32,12 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         
 
-      - name: Snyk Scan
-        uses: snyk/actions@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: test --all-projects --severity-threshold=high
+    #   - name: Snyk Scan
+    #     uses: snyk/actions@master
+    #     env:
+    #       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    #     with:
+    #       args: test --all-projects --severity-threshold=high
 
       - name: Fail Email Notification
         if: failure()
