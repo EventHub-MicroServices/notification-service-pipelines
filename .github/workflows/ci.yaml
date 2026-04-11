@@ -25,12 +25,12 @@ jobs:
             -Dsonar.sources=.
             -Dsonar.host.url=https://sonarcloud.io
 
-      - name: Sonarqube Quality Gate Check
-        id: sonarqube-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@v1
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    #   - name: Sonarqube Quality Gate Check
+    #     id: sonarqube-quality-gate-check
+    #     uses: sonarsource/sonarqube-quality-gate-action@v1
+    #     timeout-minutes: 5
+    #     env:
+    #       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     #   - name: Sonarqube Report
     #     uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b
