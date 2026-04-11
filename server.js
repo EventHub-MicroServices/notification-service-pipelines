@@ -9,9 +9,7 @@ const helmet = require('helmet');
 
 const app = express();
 
-// SonarQube: Use helmet for security headers
-app.use(helmet()); 
-// SonarQube: Avoid origin '*' in production. Using env var with fallback.
+app.use(helmet());
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
@@ -35,14 +33,9 @@ let amqpChannel;
 
 const userSockets = new Map();
 
-/**
- * Reusable logic to process, store, and emit notifications
- * Prevents code duplication (SonarQube S1192)
- */
 async function processNotification(payload) {
   const data = { ...payload };
   
-  // SonarQube: Use cryptographically strong IDs
   if (!data.id) {
     data.id = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   }
@@ -52,11 +45,9 @@ async function processNotification(payload) {
 
   const redisKey = `notifications:${data.user_id}`;
   
-  // Persistence logic
   await redisClient.lPush(redisKey, JSON.stringify(data));
   await redisClient.lTrim(redisKey, 0, 49);
 
-  // Real-time emission
   const socketId = userSockets.get(String(data.user_id));
   if (socketId) {
     io.to(socketId).emit('notification', data);
@@ -77,20 +68,22 @@ async function init() {
     const q = await amqpChannel.assertQueue('', { exclusive: true });
     await amqpChannel.bindQueue(q.queue, 'notifications', '');
 
+    // FIX: Used optional chaining (?.) to satisfy SonarQube S6353
     amqpChannel.consume(q.queue, async (msg) => {
-      if (msg && msg.content) {
+      if (msg?.content) {
         try {
           const payload = JSON.parse(msg.content.toString());
           await processNotification(payload);
         } catch (parseErr) {
-          console.error("Failed to parse RabbitMQ message:", parseErr);
+          // FIX: Explicitly logging the error to satisfy S108
+          console.error("Failed to parse RabbitMQ message content:", parseErr);
         }
       }
     }, { noAck: true });
 
   } catch (error) {
     console.error('Initialization error:', error);
-    process.exit(1); // Exit if critical connections fail
+    process.exit(1);
   }
 }
 
@@ -109,8 +102,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// --- HTTP Endpoints ---
-
 app.post('/notify', async (req, res) => {
   try {
     const payload = req.body;
@@ -121,6 +112,8 @@ app.post('/notify', async (req, res) => {
     const processed = await processNotification(payload);
     return res.json({ status: "SENT", id: processed.id });
   } catch (e) {
+    // FIX: Log exception before responding to satisfy SonarQube
+    console.error("HTTP notify error:", e);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -135,6 +128,7 @@ app.get('/notifications/:userId', async (req, res) => {
     const notifications = list.map(item => JSON.parse(item));
     res.json(notifications);
   } catch (e) {
+    console.error("Fetch notifications error:", e);
     res.status(500).json({ error: "Failed to fetch notifications" });
   }
 });
@@ -144,6 +138,7 @@ app.delete('/notifications/user/:userId', async (req, res) => {
     await redisClient.del(`notifications:${req.params.userId}`);
     res.json({ message: 'Notifications cleared' });
   } catch (e) {
+    console.error("Clear notifications error:", e);
     res.status(500).json({ error: "Failed to delete notifications" });
   }
 });
@@ -158,7 +153,8 @@ app.delete('/notifications/:userId/:notifId', async (req, res) => {
       try {
         const item = JSON.parse(itemStr);
         return item.id !== notifId;
-      } catch {
+      } catch (parseErr) {
+        console.error("Parsing error during filtration:", parseErr);
         return true;
       }
     });
@@ -166,11 +162,11 @@ app.delete('/notifications/:userId/:notifId', async (req, res) => {
     await redisClient.del(redisKey);
     
     if (remaining.length > 0) {
-      // Use rPush to maintain original order after re-inserting
       await redisClient.rPush(redisKey, remaining);
     }
     res.json({ message: 'Notification removed' });
   } catch (e) {
+    console.error("Delete single notification error:", e);
     res.status(500).json({ error: "Deletion error" });
   }
 });
