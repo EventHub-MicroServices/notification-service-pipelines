@@ -38,7 +38,6 @@ jobs:
         uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          
 
   snykscan:
     name: Snyk Scan
@@ -49,7 +48,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Snyk Scan
-        uses: snyk/actions@master
+        uses: snyk/actions@cd99351a0293699c279a0b127419e5309d43702a
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:

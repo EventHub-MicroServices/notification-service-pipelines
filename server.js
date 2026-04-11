@@ -20,14 +20,21 @@ let redisClient;
 let amqpChannel;
 const userSockets = new Map();
 
+const crypto = require('node:crypto');
+
 /**
  * SHARED LOGIC: Enriches notification, saves to Redis, and emits to Socket
  */
 async function processNotification(payload, source = "Unknown") {
   if (!payload.user_id) return;
 
+
   // 1. Enrich data
-  if (!payload.id) payload.id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+  // if (!payload.id) payload.id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+  if (!payload.id) {
+    // Generates a cryptographically strong UUID (v4)
+    payload.id = crypto.randomUUID(); 
+  }
   if (!payload.created_at) payload.created_at = new Date().toISOString();
 
   // SECURITY FIX: Log only internal state or sanitized identifiers.
