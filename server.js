@@ -30,7 +30,10 @@ async function processNotification(payload, source = "Unknown") {
   if (!payload.id) payload.id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
   if (!payload.created_at) payload.created_at = new Date().toISOString();
 
-  console.log(`Processing notification from ${source}:`, payload.id);
+  // SECURITY FIX: Log only internal state or sanitized identifiers.
+  // Cast user_id to a string and use a regex to ensure it's alphanumeric if possible.
+  const safeUserId = String(payload.user_id).replace(/[^\w-]/g, '');
+  console.log(`Notification processed. Source: ${source} | Target User: ${safeUserId}`);
 
   // 2. Persist to Redis
   const redisKey = `notifications:${payload.user_id}`;
