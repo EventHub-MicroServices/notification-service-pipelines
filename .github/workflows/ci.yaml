@@ -23,10 +23,11 @@ jobs:
             -Dsonar.projectKey=notification-service-pipelines
             -Dsonar.organization=muhammedsinanust
             -Dsonar.sources=.
+            -Dsonar.host.url=https://sonarcloud.io
 
       - name: Sonarqube Quality Gate Check
         id: sonarqube-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@master
+        uses: sonarsource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
