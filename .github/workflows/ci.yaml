@@ -29,7 +29,7 @@ jobs:
         id: sonarqube-quality-gate-check  
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
-            scanMetadataReportFile: target/sonar/report-task.txt
+            scanMetadataReportFile: .scannerwork/report-task.txt
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
