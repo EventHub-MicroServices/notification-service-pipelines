@@ -38,6 +38,7 @@ jobs:
         uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          
 
   snykscan:
     name: Snyk Scan
@@ -54,7 +55,7 @@ jobs:
         with:
           args: test --all-projects --severity-threshold=high
 
-          
+
   mailnotification:    
     name: Email Notification
     needs: [sonarscan, snykscan]
