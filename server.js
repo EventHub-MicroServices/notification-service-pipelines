@@ -1,5 +1,5 @@
 const express = require('express');
-const http = require('http');
+const http = require('node:http');
 const { Server } = require('socket.io');
 const { createClient } = require('redis');
 const amqplib = require('amqplib');
