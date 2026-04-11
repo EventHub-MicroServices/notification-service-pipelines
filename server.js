@@ -1,97 +1,105 @@
 const express = require('express');
 const http = require('node:http');
+const crypto = require('node:crypto');
 const { Server } = require('socket.io');
 const { createClient } = require('redis');
 const amqplib = require('amqplib');
 const cors = require('cors');
+const helmet = require('helmet');
 
 const app = express();
-app.use(cors());
+
+// SonarQube: Use helmet for security headers
+app.use(helmet()); 
+// SonarQube: Avoid origin '*' in production. Using env var with fallback.
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*' }
+  cors: { origin: CORS_ORIGIN }
 });
 
 const PORT = process.env.PORT || 8006;
-
-const REDIS_HOST = process.env.REDIS_HOST || 'notification-redis';
-const REDIS_PORT = process.env.REDIS_PORT || '6379';
-const REDIS_URL = process.env.REDIS_URL || `redis://${REDIS_HOST}:${REDIS_PORT}`;
+const REDIS_URL = process.env.REDIS_URL || `redis://${process.env.REDIS_HOST || 'notification-redis'}:${process.env.REDIS_PORT || '6379'}`;
 
 const RABBITMQ_USER = process.env.RABBITMQ_USER || 'guest';
-const RABBITMQ_PASSWORD = process.env.RABBITMQ_PASSWORD || 'guest';
+const RABBITMQ_PASS = process.env.RABBITMQ_PASSWORD || 'guest';
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
 const RABBITMQ_PORT = process.env.RABBITMQ_PORT || '5672';
-const RABBITMQ_URL = process.env.RABBITMQ_URL || `amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/`;
+const RABBITMQ_URL = process.env.RABBITMQ_URL || `amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/`;
 
 let redisClient;
 let amqpChannel;
 
-// Store connected users mapping (user_id -> socket_id)
-// In production, user Redis hash for scaled environments
 const userSockets = new Map();
+
+/**
+ * Reusable logic to process, store, and emit notifications
+ * Prevents code duplication (SonarQube S1192)
+ */
+async function processNotification(payload) {
+  const data = { ...payload };
+  
+  // SonarQube: Use cryptographically strong IDs
+  if (!data.id) {
+    data.id = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+  }
+  if (!data.created_at) {
+    data.created_at = new Date().toISOString();
+  }
+
+  const redisKey = `notifications:${data.user_id}`;
+  
+  // Persistence logic
+  await redisClient.lPush(redisKey, JSON.stringify(data));
+  await redisClient.lTrim(redisKey, 0, 49);
+
+  // Real-time emission
+  const socketId = userSockets.get(String(data.user_id));
+  if (socketId) {
+    io.to(socketId).emit('notification', data);
+  }
+  
+  return data;
+}
 
 async function init() {
   try {
-    // 1. Connect Redis
     redisClient = createClient({ url: REDIS_URL });
-    redisClient.on('error', (err) => console.log('Redis Client Error', err));
+    redisClient.on('error', (err) => console.error('Redis Client Error', err));
     await redisClient.connect();
-    console.log('Connected to Redis');
 
-    // 2. Connect RabbitMQ
     const conn = await amqplib.connect(RABBITMQ_URL);
     amqpChannel = await conn.createChannel();
     await amqpChannel.assertExchange('notifications', 'fanout', { durable: false });
     const q = await amqpChannel.assertQueue('', { exclusive: true });
     await amqpChannel.bindQueue(q.queue, 'notifications', '');
 
-    console.log('Connected to RabbitMQ, waiting for messages in %s', q.queue);
-
-    // Consume messages from other microservices
     amqpChannel.consume(q.queue, async (msg) => {
-      if (msg.content) {
-        const payload = JSON.parse(msg.content.toString());
-        
-        // Add ID and Timestamp
-        if (!payload.id) payload.id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-        if (!payload.created_at) payload.created_at = new Date().toISOString();
-        
-        console.log("Received notification request via RabbitMQ:", payload);
-        
-        // Save to Redis for history (Format: notifications:{userId} = List of JSON)
-        await redisClient.lPush(`notifications:${payload.user_id}`, JSON.stringify(payload));
-        // Keep only last 50
-        await redisClient.lTrim(`notifications:${payload.user_id}`, 0, 49);
-
-        // Push via Socket.io if user is connected
-        const socketId = userSockets.get(String(payload.user_id));
-        if (socketId) {
-          io.to(socketId).emit('notification', payload);
-          console.log(`Pushed to user ${payload.user_id}`);
+      if (msg && msg.content) {
+        try {
+          const payload = JSON.parse(msg.content.toString());
+          await processNotification(payload);
+        } catch (parseErr) {
+          console.error("Failed to parse RabbitMQ message:", parseErr);
         }
       }
     }, { noAck: true });
 
   } catch (error) {
     console.error('Initialization error:', error);
+    process.exit(1); // Exit if critical connections fail
   }
 }
 
-// Socket.io connections from React Frontend
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-
   socket.on('register', (userId) => {
     userSockets.set(String(userId), socket.id);
-    console.log(`Registered user ${userId} to socket ${socket.id}`);
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    // Remove from map
     for (const [userId, sockId] of userSockets.entries()) {
       if (sockId === socket.id) {
         userSockets.delete(userId);
@@ -101,45 +109,33 @@ io.on('connection', (socket) => {
   });
 });
 
-// HTTP Endpoints
+// --- HTTP Endpoints ---
+
 app.post('/notify', async (req, res) => {
   try {
     const payload = req.body;
-    if (!payload.user_id) return res.status(400).json({ error: "user_id required" });
-    
-    // Add ID and Timestamp
-    if (!payload.id) payload.id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-    if (!payload.created_at) payload.created_at = new Date().toISOString();
-
-    console.log("Received notify HTTP request:", payload);
-    
-    // Save to Redis for history
-    await redisClient.lPush(`notifications:${payload.user_id}`, JSON.stringify(payload));
-    await redisClient.lTrim(`notifications:${payload.user_id}`, 0, 49);
-
-    // Push via Socket.io if user is connected
-    const socketId = userSockets.get(String(payload.user_id));
-    if (socketId) {
-      io.to(socketId).emit('notification', payload);
-      console.log(`HTTP pushed to user ${payload.user_id}`);
+    if (!payload.user_id) {
+      return res.status(400).json({ error: "user_id required" });
     }
-    res.json({ status: "SENT" });
+    
+    const processed = await processNotification(payload);
+    return res.json({ status: "SENT", id: processed.id });
   } catch (e) {
-    console.error("HTTP notify error:", e);
-    res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-app.get('/', (req, res) => {
-  res.send({ service: 'notification-service', status: 'running (NodeJS)' });
+app.get('/', (_req, res) => {
+  res.send({ service: 'notification-service', status: 'running' });
 });
 
 app.get('/notifications/:userId', async (req, res) => {
   try {
     const list = await redisClient.lRange(`notifications:${req.params.userId}`, 0, -1);
-    res.json(list.map(s => JSON.parse(s)));
+    const notifications = list.map(item => JSON.parse(item));
+    res.json(notifications);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Failed to fetch notifications" });
   }
 });
 
@@ -148,39 +144,37 @@ app.delete('/notifications/user/:userId', async (req, res) => {
     await redisClient.del(`notifications:${req.params.userId}`);
     res.json({ message: 'Notifications cleared' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Failed to delete notifications" });
   }
 });
 
 app.delete('/notifications/:userId/:notifId', async (req, res) => {
   try {
     const { userId, notifId } = req.params;
-    const list = await redisClient.lRange(`notifications:${userId}`, 0, -1);
+    const redisKey = `notifications:${userId}`;
+    const list = await redisClient.lRange(redisKey, 0, -1);
     
     const remaining = list.filter(itemStr => {
       try {
         const item = JSON.parse(itemStr);
         return item.id !== notifId;
-      } catch (err) {
+      } catch {
         return true;
       }
     });
     
-    await redisClient.del(`notifications:${userId}`);
+    await redisClient.del(redisKey);
     
     if (remaining.length > 0) {
-      // Re-push remaining in correct order (lpush from end of array to keep order matching lpush logic or rpush)
-      // Since lRange returns [Newest, ..., Oldest], and we want Newest to be at index 0 after re-inserting,
-      // we can rPush the array directly! rPush adds to the end, so index 0 = Newest, index N = Oldest.
-      await redisClient.rPush(`notifications:${userId}`, remaining);
+      // Use rPush to maintain original order after re-inserting
+      await redisClient.rPush(redisKey, remaining);
     }
     res.json({ message: 'Notification removed' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Deletion error" });
   }
 });
 
-// Initialize and start
 init().then(() => {
   server.listen(PORT, () => {
     console.log(`Notification Service listening on port ${PORT}`);
