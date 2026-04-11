@@ -1,7 +1,7 @@
 name: CI SonarCloud and Snyk Scan
 on:
   push:
-    branches: [actions, main]
+    branches: [main]
   pull_request:
     branches: [main]
 jobs:
@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Sonarqube Scan
-        uses: sonarsource/sonarqube-github-action@v3
+        uses: sonarsource/sonarqube-scan-action@v3
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
