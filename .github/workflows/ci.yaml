@@ -26,7 +26,7 @@ jobs:
         run: npm test
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarcloud-github-action@e6195744f4794ed05f8842065ba5c4f2e90c686e
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
@@ -55,7 +55,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Snyk Scan
-        uses: snyk/actions@master
+        uses: snyk/actions/node@cd99351a0293699c279a0b127419e5309d43702a
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
