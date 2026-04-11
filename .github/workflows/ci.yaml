@@ -34,20 +34,32 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
             
-            
-    #   - name: Sonarqube Report
-    #     uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b
-    #     env:
-    #       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        
+      - name: Sonarqube Report
+        uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-    #   - name: Snyk Scan
-    #     uses: snyk/actions@master
-    #     env:
-    #       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-    #     with:
-    #       args: test --all-projects --severity-threshold=high
+  snykscan:
+    name: Snyk Scan
+    needs: sonarscan
+    runs-on: ubuntu-latest
+    steps:          
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
+      - name: Snyk Scan
+        uses: snyk/actions@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: test --all-projects --severity-threshold=high
+
+          
+  mailnotification:    
+    name: Email Notification
+    needs: [sonarscan, snykscan]
+    runs-on: ubuntu-latest
+    steps:
       - name: Fail Email Notification
         if: failure()
         uses: dawidd6/action-send-mail@v3
