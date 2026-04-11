@@ -63,12 +63,20 @@ jobs:
       - name: Install Dependencies
         run: npm ci --ignore-scripts
     
-      - name: Snyk Scan
+      - name: Snyk Test
         uses: snyk/actions/node@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args: --all-projects --severity-threshold=high
+          args: --all-projects --severity-threshold=high --org=muhammedsinanust
+
+      - name: Snyk Monitor
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: monitor
+          args: --all-projects --org=muhammedsinanust
 
   mailnotification:    
     name: Email Notification
