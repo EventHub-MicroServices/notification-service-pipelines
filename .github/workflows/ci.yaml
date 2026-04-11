@@ -30,8 +30,6 @@ jobs:
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-           args: --severity-threshold=high
 
     #   - name: Sonarqube Report
     #     uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b
@@ -56,7 +54,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: CI Pipeline Failure Notification
           body: The CI pipeline for the notification-service-pipelines repository has failed.
-           with /"${{ github.event.head_commit.message }}/" Please check the SonarCloud and Snyk reports for details.
+           with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details.
            Best regards, Your CI Pipeline
           to: ${{ secrets.RECIVER_EMAIL }}
           from: ${{ secrets.EMAIL_USERNAME }}
@@ -71,7 +69,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: CI Pipeline Notification
           body: The CI pipeline for the notification-service-pipelines repository has completed successfully.
-           with /"${{ github.event.head_commit.message }}/" Please check the SonarCloud and Snyk reports for details.
+           with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details.
            Best regards,
            Your CI Pipeline
           to: ${{ secrets.RECIVER_EMAIL }}
