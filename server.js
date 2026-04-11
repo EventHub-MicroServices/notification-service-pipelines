@@ -15,46 +15,33 @@ app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: CORS_ORIGIN }
-});
+const io = new Server(server, { cors: { origin: CORS_ORIGIN } });
 
 const PORT = process.env.PORT || 8006;
 const REDIS_URL = process.env.REDIS_URL || `redis://${process.env.REDIS_HOST || 'notification-redis'}:${process.env.REDIS_PORT || '6379'}`;
+const RABBITMQ_URL = process.env.RABBITMQ_URL || `amqp://${process.env.RABBITMQ_USER || 'guest'}:${process.env.RABBITMQ_PASSWORD || 'guest'}@${process.env.RABBITMQ_HOST || 'rabbitmq'}:${process.env.RABBITMQ_PORT || '5672'}/`;
 
-const RABBITMQ_USER = process.env.RABBITMQ_USER || 'guest';
-const RABBITMQ_PASS = process.env.RABBITMQ_PASSWORD || 'guest';
-const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
-const RABBITMQ_PORT = process.env.RABBITMQ_PORT || '5672';
-const RABBITMQ_URL = process.env.RABBITMQ_URL || `amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/`;
-
-// SonarQube: Grouping state to allow easier testing/mocking
-const serviceState = {
+// Global state object ensures smooth dependency injection for Jest
+const state = {
   redisClient: null,
-  amqpChannel: null
+  amqpChannel: null,
+  userSockets: new Map()
 };
-
-const userSockets = new Map();
 
 async function processNotification(payload) {
   const data = { ...payload };
   
-  if (!data.id) {
-    data.id = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-  }
-  if (!data.created_at) {
-    data.created_at = new Date().toISOString();
-  }
+  if (!data.id) data.id = crypto.randomUUID();
+  if (!data.created_at) data.created_at = new Date().toISOString();
 
   const redisKey = `notifications:${data.user_id}`;
   
-  // Use the serviceState reference
-  if (serviceState.redisClient) {
-    await serviceState.redisClient.lPush(redisKey, JSON.stringify(data));
-    await serviceState.redisClient.lTrim(redisKey, 0, 49);
+  if (state.redisClient) {
+    await state.redisClient.lPush(redisKey, JSON.stringify(data));
+    await state.redisClient.lTrim(redisKey, 0, 49);
   }
 
-  const socketId = userSockets.get(String(data.user_id));
+  const socketId = state.userSockets.get(String(data.user_id));
   if (socketId) {
     io.to(socketId).emit('notification', data);
   }
@@ -64,23 +51,23 @@ async function processNotification(payload) {
 
 async function init() {
   try {
-    serviceState.redisClient = createClient({ url: REDIS_URL });
-    serviceState.redisClient.on('error', (err) => console.error('Redis Client Error', err));
-    await serviceState.redisClient.connect();
+    state.redisClient = createClient({ url: REDIS_URL });
+    state.redisClient.on('error', (err) => console.error('Redis Client Error', err));
+    await state.redisClient.connect();
 
     const conn = await amqplib.connect(RABBITMQ_URL);
-    serviceState.amqpChannel = await conn.createChannel();
-    await serviceState.amqpChannel.assertExchange('notifications', 'fanout', { durable: false });
-    const q = await serviceState.amqpChannel.assertQueue('', { exclusive: true });
-    await serviceState.amqpChannel.bindQueue(q.queue, 'notifications', '');
+    state.amqpChannel = await conn.createChannel();
+    await state.amqpChannel.assertExchange('notifications', 'fanout', { durable: false });
+    const q = await state.amqpChannel.assertQueue('', { exclusive: true });
+    await state.amqpChannel.bindQueue(q.queue, 'notifications', '');
 
-    serviceState.amqpChannel.consume(q.queue, async (msg) => {
+    state.amqpChannel.consume(q.queue, async (msg) => {
       if (msg?.content) {
         try {
           const payload = JSON.parse(msg.content.toString());
           await processNotification(payload);
         } catch (parseErr) {
-          console.error("Failed to parse RabbitMQ message content:", parseErr);
+          console.error("RabbitMQ parsing error:", parseErr);
         }
       }
     }, { noAck: true });
@@ -93,13 +80,13 @@ async function init() {
 
 io.on('connection', (socket) => {
   socket.on('register', (userId) => {
-    userSockets.set(String(userId), socket.id);
+    state.userSockets.set(String(userId), socket.id);
   });
 
   socket.on('disconnect', () => {
-    for (const [userId, sockId] of userSockets.entries()) {
+    for (const [userId, sockId] of state.userSockets.entries()) {
       if (sockId === socket.id) {
-        userSockets.delete(userId);
+        state.userSockets.delete(userId);
         break;
       }
     }
@@ -108,12 +95,10 @@ io.on('connection', (socket) => {
 
 app.post('/notify', async (req, res) => {
   try {
-    const payload = req.body;
-    if (!payload.user_id) {
+    if (!req.body?.user_id) {
       return res.status(400).json({ error: "user_id required" });
     }
-    
-    const processed = await processNotification(payload);
+    const processed = await processNotification(req.body);
     return res.json({ status: "SENT", id: processed.id });
   } catch (e) {
     console.error("HTTP notify error:", e);
@@ -122,14 +107,13 @@ app.post('/notify', async (req, res) => {
 });
 
 app.get('/', (_req, res) => {
-  res.send({ service: 'notification-service', status: 'running' });
+  res.json({ service: 'notification-service', status: 'running' });
 });
 
 app.get('/notifications/:userId', async (req, res) => {
   try {
-    const list = await serviceState.redisClient.lRange(`notifications:${req.params.userId}`, 0, -1);
-    const notifications = list.map(item => JSON.parse(item));
-    res.json(notifications);
+    const list = await state.redisClient.lRange(`notifications:${req.params.userId}`, 0, -1);
+    res.json(list.map(item => JSON.parse(item)));
   } catch (e) {
     console.error("Fetch notifications error:", e);
     res.status(500).json({ error: "Failed to fetch notifications" });
@@ -138,7 +122,7 @@ app.get('/notifications/:userId', async (req, res) => {
 
 app.delete('/notifications/user/:userId', async (req, res) => {
   try {
-    await serviceState.redisClient.del(`notifications:${req.params.userId}`);
+    await state.redisClient.del(`notifications:${req.params.userId}`);
     res.json({ message: 'Notifications cleared' });
   } catch (e) {
     console.error("Clear notifications error:", e);
@@ -150,22 +134,21 @@ app.delete('/notifications/:userId/:notifId', async (req, res) => {
   try {
     const { userId, notifId } = req.params;
     const redisKey = `notifications:${userId}`;
-    const list = await serviceState.redisClient.lRange(redisKey, 0, -1);
+    const list = await state.redisClient.lRange(redisKey, 0, -1);
     
     const remaining = list.filter(itemStr => {
       try {
-        const item = JSON.parse(itemStr);
-        return item.id !== notifId;
+        return JSON.parse(itemStr).id !== notifId;
       } catch (parseErr) {
         console.error("Parsing error during filtration:", parseErr);
         return true;
       }
     });
     
-    await serviceState.redisClient.del(redisKey);
+    await state.redisClient.del(redisKey);
     
     if (remaining.length > 0) {
-      await serviceState.redisClient.rPush(redisKey, remaining);
+      await state.redisClient.rPush(redisKey, remaining);
     }
     res.json({ message: 'Notification removed' });
   } catch (e) {
@@ -176,10 +159,8 @@ app.delete('/notifications/:userId/:notifId', async (req, res) => {
 
 if (require.main === module) {
   init().then(() => {
-    server.listen(PORT, () => {
-      console.log(`Notification Service listening on port ${PORT}`);
-    });
+    server.listen(PORT, () => console.log(`Notification Service listening on port ${PORT}`));
   });
 }
 
-module.exports = { app, serviceState, userSockets, processNotification };
+module.exports = { app, state, processNotification };
