@@ -53,7 +53,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: CI Pipeline Failure Notification
           body: The CI pipeline for the notification-service-pipelines repository has failed.
-           with ${{github.run_id}} Please check the SonarCloud and Snyk reports for details.
+           with ${{ github.actor }} Please check the SonarCloud and Snyk reports for details.
            Best regards, Your CI Pipeline
           to: ${{ secrets.RECIVER_EMAIL }}
           from: ${{ secrets.EMAIL_USERNAME }}
@@ -68,7 +68,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: CI Pipeline Notification
           body: The CI pipeline for the notification-service-pipelines repository has completed successfully.
-           with ${{github.run_id}} Please check the SonarCloud and Snyk reports for details.
+           with ${{ github.actor }} Please check the SonarCloud and Snyk reports for details.
            Best regards,
            Your CI Pipeline
           to: ${{ secrets.RECIVER_EMAIL }}
