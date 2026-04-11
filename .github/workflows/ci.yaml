@@ -26,7 +26,7 @@ jobs:
         run: npm test
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v7
+        uses: SonarSource/sonarqube-scan-action@994f877f805a81c5d94944f24300e84b25916057
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
