@@ -171,8 +171,13 @@ app.delete('/notifications/:userId/:notifId', async (req, res) => {
   }
 });
 
-init().then(() => {
-  server.listen(PORT, () => {
-    console.log(`Notification Service listening on port ${PORT}`);
+if (require.main === module) {
+  init().then(() => {
+    server.listen(PORT, () => {
+      console.log(`Notification Service listening on port ${PORT}`);
+    });
   });
-});
+}
+
+// Export for testing
+module.exports = { app, server, redisClient, userSockets };

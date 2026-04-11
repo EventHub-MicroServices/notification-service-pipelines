@@ -14,6 +14,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Tests and Generate Coverage
+        run: npx jest --coverage
+
       - name: SonarQube Scan
         uses: SonarSource/sonarcloud-github-action@4006f663ecaf1f8093e8e4abb9227f6041f52216
         env:
@@ -23,6 +34,7 @@ jobs:
             -Dsonar.projectKey=notification-service-pipelines
             -Dsonar.organization=muhammedsinanust
             -Dsonar.sources=.
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
             -Dsonar.host.url=https://sonarcloud.io
 
       - name: SonarQube Quality Gate check
@@ -54,7 +66,6 @@ jobs:
         with:
           args: test --all-projects --severity-threshold=high
 
-
   mailnotification:    
     name: Email Notification
     needs: [sonarscan, snykscan]
@@ -69,9 +80,7 @@ jobs:
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: CI Pipeline Failure Notification
-          body: The CI pipeline for the notification-service-pipelines repository has failed.
-           with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details.
-           Best regards, Your CI Pipeline
+          body: The CI pipeline for the notification-service-pipelines repository has failed. with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details. Best regards, Your CI Pipeline
           to: ${{ secrets.RECIVER_EMAIL }}
           from: ${{ secrets.EMAIL_USERNAME }}
     
@@ -84,9 +93,6 @@ jobs:
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: CI Pipeline Notification
-          body: The CI pipeline for the notification-service-pipelines repository has completed successfully.
-           with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details.
-           Best regards,
-           Your CI Pipeline
+          body: The CI pipeline for the notification-service-pipelines repository has completed successfully. with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details. Best regards, Your CI Pipeline
           to: ${{ secrets.RECIVER_EMAIL }}
           from: ${{ secrets.EMAIL_USERNAME }}
