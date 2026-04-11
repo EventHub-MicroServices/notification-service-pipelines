@@ -163,4 +163,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, state, processNotification };
+module.exports = { app, state, processNotification, init };
