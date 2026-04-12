@@ -161,8 +161,8 @@ jobs:
 
       - name: Sonar Quality Gate
         uses: sonarsource/sonarqube-quality-gate-action@v1
-        with:
-          scanMetadataReportFile: .scannerwork/report-task.txt
+        # with:
+        #   scanMetadataReportFile: .scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -193,13 +193,10 @@ jobs:
 # -------------------------------
 # 3. BUILD + DOCKER + TRIVY
 # -------------------------------
-  build-and-scan:
+  build-and-push:
     name: Build Image & Scan
     needs: snykscan
     runs-on: ubuntu-latest
-
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -211,20 +208,26 @@ jobs:
       - name: Build Docker Image
         run: |
           docker build -t $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ steps.meta.outputs.tag }} .
+          docker tag $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ steps.meta.outputs.tag }} $DOCKERHUB_USERNAME/$IMAGE_NAME:latest
 
-      - name: Install Trivy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install -y trivy
-
+      # - name: Install Trivy
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+      #     wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+      #     echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
+      #     sudo apt-get update
+      #     sudo apt-get install -y trivy
+      
       - name: Trivy Image Scan
-        run: |
-          trivy image --severity HIGH,CRITICAL --exit-code 0 \
-          $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ steps.meta.outputs.tag }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ steps.meta.outputs.tag }}
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+        # run: |
+        #   trivy image --severity HIGH,CRITICAL --exit-code 0 \
+        #   $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ steps.meta.outputs.tag }}
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
@@ -234,33 +237,50 @@ jobs:
 
       - name: Push Image
         run: |
-          docker push $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ needs.build-and-scan.outputs.image_tag }}
+          docker push $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ steps.meta.outputs.tag }}
+          docker push $DOCKERHUB_USERNAME/$IMAGE_NAME:latest
 
 # -------------------------------
 # 5. EMAIL NOTIFICATION
 # -------------------------------
   mailnotification:
     name: Email Notification
-    needs: [sonarscan, snykscan, build-and-scan, push-image]
+    needs: [sonarscan, snykscan, build-and-push]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send Email
+      - name: Send Failure Email
+        if: failure()
         uses: dawidd6/action-send-mail@v3
-        if: always()
         with:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: CI Pipeline Status - ${{ job.status }}
+          subject: ❌ CI Pipeline Failed
           body: |
+            Pipeline FAILED for commit: "${{ github.event.head_commit.message }}"
+            Repo: ${{ github.repository }}
             Pipeline Status: ${{ job.status }}
-            Repository: ${{ github.repository }}
-            Commit: ${{ github.event.head_commit.message }}
+            Check GitHub Actions for logs.
+          to: ${{ secrets.RECIVER_EMAIL }}
+          from: ${{ secrets.EMAIL_USERNAME }}
 
-            Image Tag: ${{ needs.build-and-scan.outputs.image_tag }}
-
+      - name: Send Success Email
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: ✅ CI Pipeline Success
+          body: |
+            Pipeline SUCCESS for commit: "${{ github.event.head_commit.message }}"
+            Docker Image: $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ steps.meta.outputs.tag }}
+            Pipeline Status: ${{ job.status }}
             Check details in GitHub Actions.
           to: ${{ secrets.RECIVER_EMAIL }}
           from: ${{ secrets.EMAIL_USERNAME }}
+          
+          
