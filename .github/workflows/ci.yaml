@@ -1,13 +1,133 @@
-name: CI SonarCloud and Snyk Scan
+# name: CI SonarCloud and Snyk Scan
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+#     branches: [main]
+# jobs:
+#   sonarscan:
+#     name: SonarCloud Scan
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+
+#       - name: Install Dependencies
+#         run: npm install --ignore-scripts
+
+#       - name: Run Tests and Generate Coverage
+#         run: npm test
+
+#       - name: SonarQube Scan
+#         uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4
+#         env:
+#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#         with:
+#           args: >
+#             -Dsonar.projectKey=notification-service-pipelines
+#             -Dsonar.organization=muhammedsinanust
+#             -Dsonar.sources=.
+#             -Dsonar.exclusions=node_modules/**,coverage/**,**/*.test.js
+#             -Dsonar.coverage.exclusions=server.js
+#             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+#             -Dsonar.host.url=https://sonarcloud.io
+
+#       - name: SonarQube Quality Gate check
+#         id: sonarqube-quality-gate-check  
+#         uses: sonarsource/sonarqube-quality-gate-action@d304d050d930b02a896b0f85935344f023928496
+#         with:
+#           scanMetadataReportFile: .scannerwork/report-task.txt
+#         env:
+#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+#   snykscan:
+#     name: Snyk Scan
+#     needs: sonarscan
+#     runs-on: ubuntu-latest
+#     steps:          
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+
+#       - name: Install Dependencies
+#         run: npm ci --ignore-scripts
+    
+#       - name: Snyk Test
+#         uses: snyk/actions/node@master
+#         env:
+#           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+#         with:
+#           args: --all-projects --severity-threshold=high --org=muhammedsinanust
+
+#       - name: Snyk Monitor
+#         uses: snyk/actions/node@master
+#         env:
+#           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+#         with:
+#           command: monitor
+#           args: --all-projects --org=muhammedsinanust
+
+#   mailnotification:    
+#     name: Email Notification
+#     needs: [sonarscan, snykscan]
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Fail Email Notification
+#         if: failure()
+#         uses: dawidd6/action-send-mail@v3
+#         with:
+#           server_address: smtp.gmail.com
+#           server_port: 465
+#           username: ${{ secrets.EMAIL_USERNAME }}
+#           password: ${{ secrets.EMAIL_PASSWORD }}
+#           subject: CI Pipeline Failure Notification
+#           body: The CI pipeline for the notification-service-pipelines repository has failed. with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details. Best regards, Your CI Pipeline
+#           to: ${{ secrets.RECIVER_EMAIL }}
+#           from: ${{ secrets.EMAIL_USERNAME }}
+    
+#       - name: Email Notification
+#         if: success()
+#         uses: dawidd6/action-send-mail@v3
+#         with:
+#           server_address: smtp.gmail.com
+#           server_port: 465
+#           username: ${{ secrets.EMAIL_USERNAME }}
+#           password: ${{ secrets.EMAIL_PASSWORD }}
+#           subject: CI Pipeline Notification
+#           body: The CI pipeline for the notification-service-pipelines repository has completed successfully. with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details. Best regards, Your CI Pipeline
+#           to: ${{ secrets.RECIVER_EMAIL }}
+#           from: ${{ secrets.EMAIL_USERNAME }}
+name: CI Pipeline (Sonar + Snyk + Docker + Trivy)
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+env:
+  IMAGE_NAME: notification-service
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
 jobs:
+# -------------------------------
+# 1. SONAR SCAN + TEST
+# -------------------------------
   sonarscan:
     name: SonarCloud Scan
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -20,13 +140,13 @@ jobs:
           node-version: '20'
 
       - name: Install Dependencies
-        run: npm install --ignore-scripts
+        run: npm ci --ignore-scripts
 
       - name: Run Tests and Generate Coverage
         run: npm test
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4
+        uses: SonarSource/sonarqube-scan-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
@@ -39,72 +159,117 @@ jobs:
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
             -Dsonar.host.url=https://sonarcloud.io
 
-      - name: SonarQube Quality Gate check
-        id: sonarqube-quality-gate-check  
-        uses: sonarsource/sonarqube-quality-gate-action@d304d050d930b02a896b0f85935344f023928496
+      - name: Sonar Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@v1
         with:
           scanMetadataReportFile: .scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+# -------------------------------
+# 2. SNYK SCAN
+# -------------------------------
   snykscan:
     name: Snyk Scan
     needs: sonarscan
     runs-on: ubuntu-latest
-    steps:          
-      - name: Checkout Code
-        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Dependencies
-        run: npm ci --ignore-scripts
-    
+      - run: npm ci --ignore-scripts
+
       - name: Snyk Test
         uses: snyk/actions/node@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args: --all-projects --severity-threshold=high --org=muhammedsinanust
+          args: --severity-threshold=high
 
-      - name: Snyk Monitor
-        uses: snyk/actions/node@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: monitor
-          args: --all-projects --org=muhammedsinanust
-
-  mailnotification:    
-    name: Email Notification
-    needs: [sonarscan, snykscan]
+# -------------------------------
+# 3. BUILD + DOCKER + TRIVY
+# -------------------------------
+  build-and-scan:
+    name: Build Image & Scan
+    needs: snykscan
     runs-on: ubuntu-latest
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+
     steps:
-      - name: Fail Email Notification
-        if: failure()
+      - uses: actions/checkout@v4
+
+      - name: Set Image Tag
+        id: meta
+        run: echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker Image
+        run: |
+          docker build -t $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ steps.meta.outputs.tag }} .
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Trivy Image Scan
+        run: |
+          trivy image --severity HIGH,CRITICAL --exit-code 1 \
+          $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ steps.meta.outputs.tag }}
+
+# -------------------------------
+# 4. PUSH TO DOCKER HUB
+# -------------------------------
+  push-image:
+    name: Push Docker Image
+    needs: build-and-scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to DockerHub
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USERNAME --password-stdin
+
+      - name: Push Image
+        run: |
+          docker push $DOCKERHUB_USERNAME/$IMAGE_NAME:${{ needs.build-and-scan.outputs.image_tag }}
+
+# -------------------------------
+# 5. EMAIL NOTIFICATION
+# -------------------------------
+  mailnotification:
+    name: Email Notification
+    needs: [sonarscan, snykscan, build-and-scan, push-image]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Email
         uses: dawidd6/action-send-mail@v3
+        if: always()
         with:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: CI Pipeline Failure Notification
-          body: The CI pipeline for the notification-service-pipelines repository has failed. with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details. Best regards, Your CI Pipeline
-          to: ${{ secrets.RECIVER_EMAIL }}
-          from: ${{ secrets.EMAIL_USERNAME }}
-    
-      - name: Email Notification
-        if: success()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: CI Pipeline Notification
-          body: The CI pipeline for the notification-service-pipelines repository has completed successfully. with "${{ github.event.head_commit.message }}" Please check the SonarCloud and Snyk reports for details. Best regards, Your CI Pipeline
+          subject: CI Pipeline Status - ${{ job.status }}
+          body: |
+            Pipeline Status: ${{ job.status }}
+            Repository: ${{ github.repository }}
+            Commit: ${{ github.event.head_commit.message }}
+
+            Image Tag: ${{ needs.build-and-scan.outputs.image_tag }}
+
+            Check details in GitHub Actions.
           to: ${{ secrets.RECIVER_EMAIL }}
           from: ${{ secrets.EMAIL_USERNAME }}
