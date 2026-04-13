@@ -39,15 +39,11 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
             -Dsonar.projectKey=notification-service-pipelines
-            -Dsonar.organization=muhammedsinanust
             -Dsonar.sources=.
-            -Dsonar.exclusions=node_modules/**,coverage/**,**/*.test.js
-            -Dsonar.coverage.exclusions=server.js
-            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.host.url=https://sonarcloud.io
 
       - name: Sonar Quality Gate
         uses: sonarsource/sonarqube-quality-gate-action@v1
