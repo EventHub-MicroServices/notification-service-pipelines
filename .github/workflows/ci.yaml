@@ -48,11 +48,35 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: http://13.234.59.214:9000/
 
+  sonarnotification:
+    name: Email Notification
+    needs: [sonarscan, snykscan]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Failure Email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: ❌ CI Pipeline Failed
+          body: |
+            SonarScan FAILED for commit: "${{ github.event.head_commit.message }}"
+            Repo: ${{ github.repository }}
+            Pipeline Status: ${{ job.status }}
+            Check GitHub Actions for logs.
+          to: ${{ secrets.RECIVER_EMAIL }}
+          from: ${{ secrets.EMAIL_USERNAME }}
+
 # -------------------------------
 # 2. SNYK SCAN
 # -------------------------------
   snykscan:
     name: Snyk Scan
+    needs: [sonarscan]
     runs-on: ubuntu-latest
 
     steps:
@@ -71,7 +95,7 @@ jobs:
         with:
           args: --severity-threshold=high
 
-  mailnotification:
+  snyknotification:
     name: Email Notification
     needs: [sonarscan, snykscan]
     runs-on: ubuntu-latest
@@ -87,7 +111,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: ❌ CI Pipeline Failed
           body: |
-            Pipeline FAILED for commit: "${{ github.event.head_commit.message }}"
+            SnykScan FAILED for commit: "${{ github.event.head_commit.message }}"
             Repo: ${{ github.repository }}
             Pipeline Status: ${{ job.status }}
             Check GitHub Actions for logs.

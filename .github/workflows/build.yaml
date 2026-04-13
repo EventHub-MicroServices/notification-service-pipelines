@@ -17,11 +17,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Validate Tag Format
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "❌ Invalid tag format. Use v1.2.3"
+          exit 1
+          fi
 
-      - name: Set Image Tag
-        id: meta
-        run: echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v4
 
       - name: Build Docker Image
         run: |
@@ -66,7 +70,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: ❌ CI Pipeline Failed
           body: |
-            Pipeline FAILED for commit: "${{ github.event.head_commit.message }}"
+            Trivy Scan FAILED for commit: "${{ github.event.head_commit.message }}"
             Repo: ${{ github.repository }}
             Pipeline Status: ${{ job.status }}
             Check GitHub Actions for logs.
@@ -84,7 +88,7 @@ jobs:
           subject: ✅ CI Pipeline Success
           body: |
             Pipeline SUCCESS for commit: "${{ github.event.head_commit.message }}"
-            Docker Image: '${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}'
+            Docker Image: '${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.tag }}'
             Pipeline Status: ${{ job.status }}
             Check details in GitHub Actions.
           to: ${{ secrets.RECIVER_EMAIL }}
