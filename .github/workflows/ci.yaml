@@ -39,7 +39,7 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_HOST_URL: http://13.234.59.214:9000/
         with:
           args: >
             -Dsonar.projectKey=notification-service-pipelines
