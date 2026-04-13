@@ -1,6 +1,10 @@
 name: Build & Push Docker Image
 
 on:
+  workflow_run:
+    workflows: ["CI Pipeline (Sonar + Snyk + Email)"]
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       tag:
