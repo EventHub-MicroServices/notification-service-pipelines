@@ -47,7 +47,7 @@ jobs:
 # -------------------------------
   mailnotification:
     name: Email Notification
-    needs: [sonarscan, snykscan, build-and-push]
+    needs: [build-and-push]
     runs-on: ubuntu-latest
 
     steps:
