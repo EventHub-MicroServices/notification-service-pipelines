@@ -46,18 +46,17 @@ jobs:
             -Dsonar.sources=.
 
       - name: Sonar Quality Gate
-        uses: sonarsource/sonarqube-quality-gate-action@v1
-        # with:
-        #   scanMetadataReportFile: .scannerwork/report-task.txt
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: http://13.234.59.214:9000/
 
 # -------------------------------
 # 2. SNYK SCAN
 # -------------------------------
   snykscan:
     name: Snyk Scan
-    needs: sonarscan
     runs-on: ubuntu-latest
 
     steps:
