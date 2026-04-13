@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  IMAGE_NAME: notification-service
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-
 jobs:
 # -------------------------------
 # 1. SONAR SCAN + TEST
