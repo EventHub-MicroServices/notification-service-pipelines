@@ -40,6 +40,8 @@ jobs:
           args: >
             -Dsonar.projectKey=notification-service-pipelines
             -Dsonar.sources=.
+            -Dsonar.exclusions=node_modules/**,coverage/**,**/*.test.js
+            -Dsonar.coverage.exclusions=server.js
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
       - name: Sonar Quality Gate
