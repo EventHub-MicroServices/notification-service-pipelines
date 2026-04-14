@@ -35,7 +35,7 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: http://13.234.59.214:9000/
+          SONAR_HOST_URL: http://13.232.131.129:9000/
         with:
           args: >
             -Dsonar.projectKey=notification-service-pipelines
@@ -47,7 +47,7 @@ jobs:
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: http://13.234.59.214:9000/
+          SONAR_HOST_URL: http://13.232.131.129:9000/
 
   sonarnotification:
     name: Email Notification
