@@ -29,7 +29,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Run Tests and Generate Coverage
-        run: npm test
+        run: npx jest --coverage
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v7
@@ -40,6 +40,7 @@ jobs:
           args: >
             -Dsonar.projectKey=notification-service-pipelines
             -Dsonar.sources=.
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
       - name: Sonar Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1
